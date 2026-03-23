@@ -1,0 +1,28 @@
+# Use Python 3.11 slim image for a smaller footprint
+FROM python:3.11-slim
+# Set working directory
+WORKDIR /app
+# Install system dependencies for FAISS, PyMuPDF, and ReportLab
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libpango-1.0-0 \
+    libharfbuzz0b \
+    libpangoft2-1.0-0 \
+    libpangocairo-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+# Copy the rest of the application code
+COPY . .
+# Expose ports for Streamlit (8501) and FastAPI (8000)
+EXPOSE 8501
+EXPOSE 8000
+# Create a startup script to run both services if needed, 
+# or just default to Streamlit for now.
+# To run both, we'd use a process manager like supervisord or a simple shell script.
+# For now, we'll set the default entrypoint to Streamlit.
+ENTRYPOINT ["streamlit", "run", "app_agent.py", "--server.port=8501", "--server.address=0.0.0.0"]

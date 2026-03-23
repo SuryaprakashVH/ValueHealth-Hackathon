@@ -5,6 +5,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 import io
 import sys
+import database
 
 """
 LexGuard — Orchestrator (Mini LangGraph-style pipeline)
@@ -34,11 +35,11 @@ def run_pipeline(file_bytes: bytes, file_name: str) -> PipelineState:
     Each agent updates the shared state and returns it.
     """
 
-    # Initialise shared state
+    # Initialise shared state 
     state = PipelineState(file_bytes=file_bytes, file_name=file_name)
     logger.info(f"[Orchestrator] Pipeline started for: {file_name}")
 
-    # Node 1: Document Ingestion Agent
+    #  Node 1: Document Ingestion Agent 
     state = document_ingestion_agent.run(state)
 
     if state.ingestion_status == AgentStatus.FAILED:
@@ -50,18 +51,15 @@ def run_pipeline(file_bytes: bytes, file_name: str) -> PipelineState:
             f"[Orchestrator] Scanned pages found: {state.scanned_pages}. "
             "Routing to OCR node... (stub — not built yet)"
         )
-        # TODO: state = ocr_agent.run(state)
-        # For now, continue with whatever text was extracted
 
-    # Node 2: Metadata Extraction Agent
+    #  Node 2: Metadata Extraction Agent 
     state = metadata_extraction_agent.run(state)
     if state.metadata_status == AgentStatus.FAILED:
         logger.error(f"[Orchestrator] Metadata extraction failed: {state.metadata_error}")
-        # Non-fatal — pipeline continues, downstream agents will have empty metadata
     else:
         logger.info("[Orchestrator] Metadata extraction completed.")
 
-    # Node 3: Clause Comparison Agent 
+    #  Node 3: Clause Comparison Agent
     state = clause_comparison_agent.run(state)
     if state.clause_status == AgentStatus.FAILED:
         logger.error(f"[Orchestrator] Clause comparison failed: {state.clause_error}")
@@ -69,7 +67,7 @@ def run_pipeline(file_bytes: bytes, file_name: str) -> PipelineState:
         deviated = sum(1 for c in state.clause_comparisons if c["is_deviated"])
         logger.info(f"[Orchestrator] Clause comparison done — {deviated} deviations found.")
 
-    # Node 4: Risk Classification Agent
+    # Node 4: Risk Classification Agent 
     state = risk_classification_agent.run(state)
     if state.risk_status == AgentStatus.FAILED:
         logger.error(f"[Orchestrator] Risk classification failed: {state.risk_error}")
@@ -77,18 +75,24 @@ def run_pipeline(file_bytes: bytes, file_name: str) -> PipelineState:
         high = sum(1 for r in state.risk_register if r["severity"] == "HIGH")
         logger.info(f"[Orchestrator] Risk classification done — {high} HIGH risks found.")
 
-    # Node 5: Report Generation Agent
+    # Node 5: Report Generation Agent 
     state = report_generation_agent.run(state)
     if state.report_status == AgentStatus.FAILED:
         logger.error(f"[Orchestrator] Report generation failed: {state.report_error}")
     else:
         logger.info(f"[Orchestrator] Report generated ({len(state.report_pdf_bytes):,} bytes).")
 
-    logger.info("[Orchestrator] Pipeline complete.")
+    #  Save to MongoDB
+    db_id = database.save_review(state)
+    if db_id:
+        logger.info(f"[Orchestrator] Review saved to MongoDB.")
+    else:
+        logger.warning("[Orchestrator] MongoDB save skipped (DB unavailable or not configured).")
+
+    logger.info(f"[Orchestrator] Pipeline complete. Ingestion status: {state.ingestion_status.value}")
     return state
 
-
-# Quick test run 
+#  Quick test run
 if __name__ == "__main__":
     # Try to create a test PDF
     try:

@@ -4,13 +4,17 @@ Run with: streamlit run app_agent.py
 """
 
 import json
+import uuid
 import streamlit as st
 from orchestrator import run_pipeline
 from agent_state import AgentStatus
 
 st.set_page_config(page_title="LexGuard", page_icon="⚖️", layout="wide")
 
-# Session state defaults 
+# ── Session state defaults ────────────────────────────────────────────────
+# Initialise ALL session state keys upfront before ANY rendering happens.
+# This is critical — sidebar reads from these keys, main page writes to them.
+
 if "agent_statuses" not in st.session_state:
     st.session_state.agent_statuses = {
         "Document Ingestion":  AgentStatus.PENDING,
@@ -29,7 +33,7 @@ if "show_json" not in st.session_state:
 if "pipeline_ran" not in st.session_state:
     st.session_state.pipeline_ran = False
 
-# Constants 
+# ── Constants ─────────────────────────────────────────────────────────────
 STATUS_ICON = {
     AgentStatus.COMPLETED: "🟢",
     AgentStatus.RUNNING:   "🔵",
@@ -45,13 +49,15 @@ STATUS_LABEL = {
     AgentStatus.PENDING:   "Pending",
 }
 
-# SIDEBAR 
+# ══════════════════════════════════════════════════════════════════════════
+# SIDEBAR — reads from session_state (always up to date)
+# ══════════════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("### ⚖️ LexGuard")
     st.caption("Multi-Agent Contract Review System")
     st.divider()
 
-    # Pipeline Status
+    # ── Pipeline Status ───────────────────────────────────────────────────
     st.markdown("#### 🔁 Pipeline Status")
 
     for agent_name, status in st.session_state.agent_statuses.items():
@@ -67,7 +73,7 @@ with st.sidebar:
     st.caption("Agents run in sequence. Each one unlocks the next.")
     st.divider()
 
-    # Pipeline State JSON — only shown after pipeline has run 
+    # ── Pipeline State JSON — only shown after pipeline has run ───────────
     if st.session_state.pipeline_json is not None:
         st.markdown("#### 🗂️ Pipeline State JSON")
         st.caption("Live state passed between agents")
@@ -128,7 +134,9 @@ with st.sidebar:
         st.caption("Upload a contract to see the pipeline JSON here.")
 
 
+# ══════════════════════════════════════════════════════════════════════════
 # MAIN PAGE
+# ══════════════════════════════════════════════════════════════════════════
 st.title("⚖️ LexGuard")
 st.caption("Multi-Agent Contract Review System — Document Ingestion Agent")
 st.divider()
@@ -148,7 +156,8 @@ if not uploaded_file:
     st.info("Upload a contract PDF. The Ingestion Agent will validate, extract, and hand off to the pipeline.")
     st.stop()
 
-#  Run pipeline only once per upload 
+# ── Run pipeline only once per upload ────────────────────────────────────
+# Use file name + size as a cache key so re-renders don't re-run the pipeline
 file_key = f"{uploaded_file.name}_{uploaded_file.size}"
 
 if st.session_state.get("last_file_key") != file_key:
@@ -208,11 +217,11 @@ if not st.session_state.pipeline_ran:
     # Rerun so sidebar re-renders with updated session_state values
     st.rerun()
 
-# From here, read results from session_state (not re-running pipeline) 
+# ── From here, read results from session_state (not re-running pipeline) ──
 state  = st.session_state.pipeline_state
 output = st.session_state.pipeline_json
 
-# Persistent download button at top if report is ready 
+# ── Persistent download button at top if report is ready ────────────────────
 if state.report_pdf_bytes:
     fname = state.file_name.replace(".pdf", "").replace(" ", "_")
     st.download_button(
@@ -225,19 +234,19 @@ if state.report_pdf_bytes:
         key="dl_pdf_top",
     )
 
-# Agent status banner 
+# ── Agent status banner ───────────────────────────────────────────────────
 if state.metadata_status == AgentStatus.FAILED:
     st.warning(f"Metadata Extraction failed: {getattr(state, 'metadata_error', 'Unknown error')} — check your GEMINI_API_KEY.")
 
-# if state.ingestion_status == AgentStatus.FAILED:
-#     st.error(f"Ingestion Agent FAILED: {state.ingestion_error}")
-#     st.stop()
-# elif state.ingestion_status == AgentStatus.NEEDS_OCR:
-#     st.warning(f"Scanned pages detected: {state.scanned_pages}. OCR agent will handle these.")
-# elif state.ingestion_status == AgentStatus.COMPLETED:
-#     st.success("Ingestion Agent completed successfully. Ready for next agent.")
+if state.ingestion_status == AgentStatus.FAILED:
+    st.error(f"Ingestion Agent FAILED: {state.ingestion_error}")
+    st.stop()
+elif state.ingestion_status == AgentStatus.NEEDS_OCR:
+    st.warning(f"Scanned pages detected: {state.scanned_pages}. OCR agent will handle these.")
+elif state.ingestion_status == AgentStatus.COMPLETED:
+    st.success("Ingestion Agent completed successfully. Ready for next agent.")
 
-# Metrics 
+# ── Metrics ───────────────────────────────────────────────────────────────
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Pages",         state.page_count)
 col2.metric("File size",     f"{state.file_size_kb} KB")
@@ -247,7 +256,7 @@ col4.metric("Clauses found", f"{found_n}/{len(state.clause_segments)}")
 col5.metric("Scanned pages", len(state.scanned_pages))
 st.caption(f"Document hash (SHA-256): `{state.doc_hash}`")
 
-# Contract type 
+# ── Contract type ─────────────────────────────────────────────────────────
 CONFIDENCE_COLOR = {"high": "🟢", "medium": "🟡", "low": "🔴"}
 conf_icon = CONFIDENCE_COLOR.get(state.contract_type_confidence, "⚪")
 st.markdown(
@@ -256,7 +265,7 @@ st.markdown(
     f"*(method: {state.contract_type_method})*"
 )
 
-# Warnings 
+# ── Warnings ──────────────────────────────────────────────────────────────
 if state.ingestion_warnings:
     with st.expander(f"⚠️ {len(state.ingestion_warnings)} warning(s)"):
         for w in state.ingestion_warnings:
@@ -264,8 +273,8 @@ if state.ingestion_warnings:
 
 st.divider()
 
-# Tabs 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📄 Extracted text", "🔍 Clause segments", "🧾 Metadata", "⚖️ Clause Comparison", "🚨 Risk Register", "📋 Report"])
+# ── Tabs ──────────────────────────────────────────────────────────────────
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📄 Extracted text", "🔍 Clause segments", "🧾 Metadata", "⚖️ Clause Comparison", "🚨 Risk Register", "📋 Report", "💬 Chat"])
 
 with tab1:
     view = st.radio("View", ["Full document", "Page by page"],
@@ -332,7 +341,7 @@ with tab2:
                 c2.markdown(f"**Category:** {cat_icon} {category.replace('_',' ').title()}")
                 c3.markdown(f"**Document heading:** `{raw}`")
 
-# Tab 3: Metadata 
+# ── Tab 3: Metadata ───────────────────────────────────────────────────────
 with tab3:
     if state.metadata_status == AgentStatus.PENDING:
         st.info("Metadata Extraction Agent has not run yet.")
@@ -384,7 +393,7 @@ with tab3:
 
 st.divider()
 
-# Tab 5: Risk Register
+# ── Tab 5: Risk Register ──────────────────────────────────────────────────
 with tab5:
     if state.risk_status == AgentStatus.PENDING:
         st.info("Risk Classification Agent has not run yet.")
@@ -440,7 +449,7 @@ with tab5:
 
 st.divider()
 
-# Tab 6: Report 
+# ── Tab 6: Report ─────────────────────────────────────────────────────────
 with tab6:
     if state.report_status == AgentStatus.PENDING:
         st.info("Report Generation Agent has not run yet.")
@@ -449,50 +458,151 @@ with tab6:
     elif not state.report_pdf_bytes:
         st.warning("Report was not generated.")
     else:
-        st.success(f"Legal Risk Brief is ready — {len(state.report_pdf_bytes):,} bytes")
+        import base64
 
-        # Big download button
-        fname = state.file_name.replace(".pdf", "").replace(" ", "_")
-        st.download_button(
-            label="⬇ Download Legal Risk Brief (PDF)",
-            data=state.report_pdf_bytes,
-            file_name=f"LexGuard_RiskBrief_{fname}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-            type="primary",
-            key="dl_pdf_tab",
-        )
+        fname      = state.file_name.replace(".pdf", "").replace(" ", "_")
+        pdf_b64    = base64.b64encode(state.report_pdf_bytes).decode("utf-8")
+        size_kb    = round(len(state.report_pdf_bytes) / 1024, 1)
+        size_label = f"{size_kb} KB" if size_kb < 1024 else f"{round(size_kb/1024,2)} MB"
 
-        st.divider()
-
-        # Report preview
-        st.subheader("Report preview")
         reg    = state.risk_register
         high   = [r for r in reg if r["severity"] == "HIGH"]
         medium = [r for r in reg if r["severity"] == "MEDIUM"]
         low    = [r for r in reg if r["severity"] == "LOW"]
         acc    = [r for r in reg if r["severity"] == "ACCEPTED"]
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("🔴 High",     len(high))
-        c2.metric("🟡 Medium",   len(medium))
-        c3.metric("🟢 Low",      len(low))
-        c4.metric("✅ Accepted", len(acc))
+        # ── Two-column layout: left = info + download, right = PDF preview ──
+        col_left, col_right = st.columns([1, 1.6])
 
-        st.divider()
-        st.markdown("**Sections in your PDF:**")
-        st.markdown("""
-- Cover page — contract name, type, risk summary counts
-- Executive Summary — AI-generated overview
-- Contract Metadata — parties, dates, jurisdiction, terms
-- Risk Register — color-coded table (HIGH/MEDIUM/LOW)
-- Clause-Level Detail — deviation + business impact + recommendation per clause
-- Audit Trail — doc hash, timestamp, model used
+        with col_left:
+            st.success("Legal Risk Brief is ready")
+            st.divider()
+
+            # File info card
+            st.markdown("**📄 Report details**")
+            st.markdown(f"- File: `LexGuard_RiskBrief_{fname}.pdf`")
+            st.markdown(f"- Size: **{size_label}**")
+            st.markdown(f"- Contract: `{state.contract_type}` ({state.contract_type_confidence} confidence)")
+            st.markdown(f"- Pages reviewed: {state.page_count}")
+            st.divider()
+
+            # Risk summary
+            st.markdown("**🚨 Risk summary**")
+            m1, m2 = st.columns(2)
+            m1.metric("🔴 High",   len(high))
+            m2.metric("🟡 Medium", len(medium))
+            m3, m4 = st.columns(2)
+            m3.metric("🟢 Low",      len(low))
+            m4.metric("✅ Accepted", len(acc))
+            st.divider()
+
+            # Sections list
+            st.markdown("**📋 PDF contains**")
+            st.markdown("""
+- Cover page — name, type, risk counts
+- Executive Summary — AI overview
+- Contract Metadata — parties, dates, terms
+- Risk Register — color-coded table
+- Clause Detail — impact + recommendations
+- Audit Trail — hash, timestamp, model
 """)
+            st.divider()
+
+            # Download button with file size
+            st.download_button(
+                label=f"⬇  Download PDF  ·  {size_label}",
+                data=state.report_pdf_bytes,
+                file_name=f"LexGuard_RiskBrief_{fname}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary",
+                key="dl_pdf_tab",
+            )
 
 st.divider()
 
-# Build + store pipeline state JSON (feeds sidebar viewer)
+# ── Tab 7: Chat ───────────────────────────────────────────────────────────
+with tab7:
+    # Initialise session state for chat
+    if "chat_session_id" not in st.session_state:
+        st.session_state.chat_session_id = str(uuid.uuid4())
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+
+    st.markdown("#### 💬 LexGuard AI Assistant")
+    st.caption(
+        f"Ask about **{state.file_name}**, search past reviews, "
+        "get redline suggestions, or ask general legal questions."
+    )
+
+    # Suggested questions
+    st.markdown("**Try asking:**")
+    col_q1, col_q2, col_q3 = st.columns(3)
+    suggestions = [
+        ("What are the HIGH risk clauses?",          "current_contract"),
+        ("Suggest a redline for the liability cap",  "redline"),
+        ("What does indemnification mean?",          "legal_qa"),
+        ("Show past vendor agreements reviewed",     "db_search"),
+        ("What is the jurisdiction of this contract?", "current_contract"),
+        ("Rewrite the termination clause",           "redline"),
+    ]
+    for i, (suggestion, _) in enumerate(suggestions):
+        col = [col_q1, col_q2, col_q3][i % 3]
+        if col.button(suggestion, key=f"sugg_{i}", use_container_width=True):
+            st.session_state.chat_messages.append({"role": "user", "content": suggestion})
+            with st.spinner("Thinking..."):
+                try:
+                    import chatbot_agent
+                    answer = chatbot_agent.answer(
+                        question     = suggestion,
+                        state        = state,
+                        session_id   = st.session_state.chat_session_id,
+                        chat_history = st.session_state.chat_messages[:-1],
+                    )
+                except Exception as e:
+                    answer = f"Error: {e}"
+            st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+            st.rerun()
+
+    st.divider()
+
+    # Chat message history
+    for msg in st.session_state.chat_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Ask anything about this contract..."):
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    import chatbot_agent
+                    answer = chatbot_agent.answer(
+                        question     = prompt,
+                        state        = state,
+                        session_id   = st.session_state.chat_session_id,
+                        chat_history = st.session_state.chat_messages[:-1],
+                    )
+                except Exception as e:
+                    answer = f"Error: {e}"
+            st.markdown(answer)
+
+        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
+
+    # Clear chat button
+    if st.session_state.chat_messages:
+        if st.button("🗑 Clear chat", key="clear_chat"):
+            st.session_state.chat_messages = []
+            st.session_state.chat_session_id = str(uuid.uuid4())
+            st.rerun()
+
+st.divider()
+
+# ── Build + store pipeline state JSON (feeds sidebar viewer) ─────────────
 output = {
     "file_name":                state.file_name,
     "doc_hash":                 state.doc_hash,
@@ -521,7 +631,7 @@ output = {
         for p in state.pages
     ],
 }
-# Tab 4: Clause Comparison
+# ── Tab 4: Clause Comparison ─────────────────────────────────────────────
 with tab4:
     if state.clause_status == AgentStatus.PENDING:
         st.info("Clause Comparison Agent has not run yet.")
