@@ -1,5 +1,14 @@
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from agent_state import AgentStatus
+from groq import Groq
+from dotenv import load_dotenv
+
 """
-LexGuard — Risk Classification Agent  (Agent 5)
+LexGuard — Risk Classification Agent
 
 Role         : Read every deviated clause from Agent 3+4 and classify
                each one with severity, risk type, business impact,
@@ -28,12 +37,6 @@ Input    : state.clause_comparisons (from Agent 3+4)
 Output   : state.risk_register — list of classified risk items
 """
 
-import json
-import logging
-import os
-import re
-from pathlib import Path
-
 logger = logging.getLogger(__name__)
 
 AGENT_NAME = "RiskClassificationAgent"
@@ -45,8 +48,6 @@ LLM_MODEL  = "llama-3.3-70b-versatile"
 # ══════════════════════════════════════════════════════════════════════════
 
 def run(state):
-    from agent_state import AgentStatus
-
     logger.info(f"[{AGENT_NAME}] Starting → {len(state.clause_comparisons)} comparisons to classify")
     state.risk_status = AgentStatus.RUNNING
 
@@ -121,11 +122,7 @@ def run(state):
     )
     return state
 
-
-# ══════════════════════════════════════════════════════════════════════════
 # LLM CLASSIFICATION
-# ══════════════════════════════════════════════════════════════════════════
-
 def _classify_with_llm(client, canonical_title, category, contract_text,
                         standard_text, similarity, deviation_summary):
     """
@@ -190,14 +187,9 @@ Return raw JSON only — no markdown, no explanation."""
             "recommendation":  "Flag for legal team review.",
         }
 
-
-# ══════════════════════════════════════════════════════════════════════════
 # HELPERS
-# ══════════════════════════════════════════════════════════════════════════
-
 def _get_groq_client():
     try:
-        from groq import Groq
         api_key = os.getenv("GROQ_API_KEY")
         if api_key:
             return Groq(api_key=api_key)
@@ -208,7 +200,6 @@ def _get_groq_client():
 
 def _load_env():
     try:
-        from dotenv import load_dotenv
         env_path = Path(__file__).resolve().parent / ".env"
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
@@ -226,7 +217,6 @@ def _parse_json(raw):
 
 
 def _fail(state, error):
-    from agent_state import AgentStatus
     logger.error(f"[{AGENT_NAME}] FAILED — {error}")
     state.risk_status = AgentStatus.FAILED
     state.risk_error  = error

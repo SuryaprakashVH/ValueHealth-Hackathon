@@ -1,3 +1,13 @@
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from groq import Groq
+from dotenv import load_dotenv
+from agent_state import AgentStatus
+
+
 """
 LexGuard — Metadata Extraction Agent  (Agent 2)
 
@@ -8,22 +18,14 @@ Model    : llama-3.3-70b-versatile
 API Docs : https://console.groq.com
 """
 
-import json
-import logging
-import os
-import re
-from pathlib import Path
-
 logger = logging.getLogger(__name__)
 
 AGENT_NAME = "MetadataExtractionAgent"
 MODEL_NAME = "llama-3.3-70b-versatile"
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# METADATA SCHEMAS — one per contract type
-# ══════════════════════════════════════════════════════════════════════════
 
+# METADATA SCHEMAS 
 METADATA_SCHEMAS = {
     "NDA": {
         "effective_date":         "The date the agreement becomes effective",
@@ -66,25 +68,13 @@ FALLBACK_SCHEMA = {
 }
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════
-
 def run(state):
-    from agent_state import AgentStatus
-
     logger.info(f"[{AGENT_NAME}] Starting → contract type: {state.contract_type}")
     state.metadata_status = AgentStatus.RUNNING
 
     # Load .env
     _load_env()
-
-    # Check groq is installed
-    try:
-        from groq import Groq
-    except ImportError:
-        return _fail(state,
-            "groq package not installed. Run: pip install groq")
 
     # Check API key
     api_key = os.getenv("GROQ_API_KEY")
@@ -149,13 +139,9 @@ def run(state):
     return state
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # HELPERS
-# ══════════════════════════════════════════════════════════════════════════
-
 def _load_env():
     try:
-        from dotenv import load_dotenv
         env_path = Path(__file__).resolve().parent / ".env"
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
@@ -170,7 +156,6 @@ def _build_prompt(text, contract_type, schema):
     field_list = "\n".join(
         f'  "{k}": "{v}"' for k, v in schema.items()
     )
-    # Use first 6000 chars — Llama 3.3 70B has 128K context but keep prompt lean
     doc_text = text[:6000] if len(text) > 6000 else text
 
     return f"""Extract the following metadata fields from this {contract_type} contract.
@@ -199,7 +184,6 @@ def _parse_json(raw):
 
 
 def _fail(state, error):
-    from agent_state import AgentStatus
     logger.error(f"[{AGENT_NAME}] FAILED — {error}")
     state.metadata_status = AgentStatus.FAILED
     state.metadata_error  = error

@@ -1,9 +1,22 @@
+from sentence_transformers import SentenceTransformer
+import numpy as np
+import faiss
+import json
+import logging
+import os
+import re
+from pathlib import Path
+from agent_state import AgentStatus
+from groq import Groq
+from dotenv import load_dotenv
+
+
 """
-LexGuard — Clause Comparison Agent  (Agents 3 + 4 combined)
+LexGuard — Clause Comparison Agent
 
-This agent handles two responsibilities from the workflow:
+The agent handles two responsibilities from the workflow:
 
-  [3] Clause Embedding + Retrieval Layer
+Clause Embedding + Retrieval Layer
       - Loads the standard clause library for the detected contract type
       - Embeds all standard clauses using sentence-transformers
         (all-MiniLM-L6-v2 — fast, free, runs locally, no API needed)
@@ -11,7 +24,7 @@ This agent handles two responsibilities from the workflow:
       - For each FOUND clause from Agent 1, retrieves the best matching
         standard clause using cosine similarity
 
-  [4] Clause Comparison Agent
+Clause Comparison Agent
       - For each matched pair (contract clause vs standard clause):
         * Uses similarity score from FAISS as deviation signal
         * Calls Groq LLM to generate a plain-English deviation summary
@@ -26,20 +39,14 @@ Input  : PipelineState with clause_segments + contract_type + clean_text
 Output : PipelineState with clause_status = COMPLETED / FAILED
 """
 
-import json
-import logging
-import os
-import re
-from pathlib import Path
-
 logger = logging.getLogger(__name__)
 
 AGENT_NAME           = "ClauseComparisonAgent"
 EMBEDDING_MODEL      = "all-MiniLM-L6-v2"
 LLM_MODEL            = "llama-3.3-70b-versatile"
-DEVIATION_THRESHOLD  = 0.75   # Similarity below this = deviated clause
+DEVIATION_THRESHOLD  = 0.75 
 
-# ── Standard clause library (same data as document_ingestion_agent) ──────
+# ── Standard clause library 
 CLAUSE_LIBRARY = {
     "NDA": [
         {"clause_id": "nda_001", "canonical_title": "Confidential Information Definition",      "raw_heading": "Definition of Confidential Information", "category": "confidentiality", "risk_weight": "HIGH",   "text": "\u201cConfidential Information\u201d means any and all non-public, proprietary, or confidential information disclosed by or on behalf of a Disclosing Party to the Receiving Party, whether orally, visually, electronically, or in writing, including but not limited to trade secrets, business plans, customer data, financial information, and technical data, whether or not marked as confidential, provided that such information is identified as confidential at the time of disclosure or should reasonably be understood to be confidential."},
@@ -94,13 +101,8 @@ CLAUSE_LIBRARY = {
 ALL_CLAUSES = [c for clauses in CLAUSE_LIBRARY.values() for c in clauses]
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════
-
 def run(state):
-    from agent_state import AgentStatus
-
     logger.info(f"[{AGENT_NAME}] Starting → {len(state.clause_segments)} clauses to compare")
     state.clause_status = AgentStatus.RUNNING
 
@@ -114,18 +116,10 @@ def run(state):
         state.clause_comparisons = []
         return state
 
-    # ── Step 1: Load embedding model ─────────────────────────────────────
-    try:
-        from sentence_transformers import SentenceTransformer
-        import numpy as np
-        import faiss
-    except ImportError as e:
-        return _fail(state, f"Missing package: {e}. Run: pip install sentence-transformers faiss-cpu")
-
     logger.info(f"[{AGENT_NAME}] Loading embedding model: {EMBEDDING_MODEL}")
     embedder = SentenceTransformer(EMBEDDING_MODEL)
 
-    # ── Step 2: Build FAISS index from standard clause library ───────────
+    # Build FAISS index from standard clause library 
     library = CLAUSE_LIBRARY.get(state.contract_type, ALL_CLAUSES)
     std_texts  = [c["text"] for c in library]
     std_embeddings = embedder.encode(std_texts, convert_to_numpy=True)
@@ -136,10 +130,10 @@ def run(state):
     index.add(std_embeddings.astype("float32"))
     logger.info(f"[{AGENT_NAME}] FAISS index built: {len(library)} standard clauses")
 
-    # ── Step 3: Extract contract clause texts from clean_text ─────────────
+    # Extract contract clause texts from clean_text 
     contract_clause_texts = _extract_clause_texts(state.clean_text, found_clauses)
 
-    # ── Step 4: For each found clause — retrieve + compare ────────────────
+    # For each found clause — retrieve + compare
     comparisons = []
     groq_client = _get_groq_client()
 
@@ -203,10 +197,7 @@ def run(state):
     return state
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # EXTRACT CLAUSE TEXT FROM DOCUMENT
-# ══════════════════════════════════════════════════════════════════════════
-
 def _extract_clause_texts(clean_text: str, found_clauses: list) -> dict:
     """
     For each found clause, extract the relevant paragraph(s) from the
@@ -243,14 +234,10 @@ def _extract_clause_texts(clean_text: str, found_clauses: list) -> dict:
     return result
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # LLM DEVIATION SUMMARY
-# ══════════════════════════════════════════════════════════════════════════
-
 def _get_groq_client():
     """Initialise Groq client. Returns None if not available."""
     try:
-        from groq import Groq
         api_key = os.getenv("GROQ_API_KEY")
         if api_key:
             return Groq(api_key=api_key)
@@ -302,13 +289,9 @@ Write the deviation summary:"""
         return f"Deviation detected (similarity: {similarity:.0%}). Summary generation failed: {e}"
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # HELPERS
-# ══════════════════════════════════════════════════════════════════════════
-
 def _load_env():
     try:
-        from dotenv import load_dotenv
         env_path = Path(__file__).resolve().parent / ".env"
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
@@ -319,7 +302,6 @@ def _load_env():
 
 
 def _fail(state, error):
-    from agent_state import AgentStatus
     logger.error(f"[{AGENT_NAME}] FAILED — {error}")
     state.clause_status = AgentStatus.FAILED
     state.clause_error  = error

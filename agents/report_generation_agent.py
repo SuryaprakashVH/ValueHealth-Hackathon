@@ -1,5 +1,25 @@
+import io
+import logging
+import os
+import re
+from datetime import datetime
+from pathlib import Path
+from agent_state import AgentStatus
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.lib import colors
+from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        HRFlowable, PageBreak, KeepTogether
+    )
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from groq import Groq
+from dotenv import load_dotenv
+from agent_state import AgentStatus
+
 """
-LexGuard — Report Generation Agent  (Agent 7 — Final Agent)
+LexGuard — Report Generation Agent
 
 Role         : Consume all pipeline outputs and produce a professional
                Legal Risk Brief as a downloadable PDF.
@@ -26,25 +46,14 @@ Input    : Full PipelineState (all previous agents completed)
 Output   : state.report_pdf_bytes, state.report_status = COMPLETED
 """
 
-import io
-import logging
-import os
-import re
-from datetime import datetime
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 AGENT_NAME = "ReportGenerationAgent"
 LLM_MODEL  = "llama-3.3-70b-versatile"
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════
-
 def run(state):
-    from agent_state import AgentStatus
-
     logger.info(f"[{AGENT_NAME}] Starting report generation...")
     state.report_status = AgentStatus.RUNNING
 
@@ -65,10 +74,7 @@ def run(state):
     return state
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# STEP 1 — EXECUTIVE SUMMARY VIA LLM
-# ══════════════════════════════════════════════════════════════════════════
-
+# EXECUTIVE SUMMARY VIA LLM
 def _generate_executive_summary(state) -> str:
     """Call Groq to write a 3-4 sentence executive summary."""
     groq_client = _get_groq_client()
@@ -137,21 +143,8 @@ def _fallback_summary(state) -> str:
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# STEP 2 — BUILD PDF WITH REPORTLAB
-# ══════════════════════════════════════════════════════════════════════════
-
+# BUILD PDF WITH REPORTLAB
 def _build_pdf(state, exec_summary: str) -> bytes:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm
-    from reportlab.lib import colors
-    from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-        HRFlowable, PageBreak, KeepTogether
-    )
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-
     buf = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -200,12 +193,10 @@ def _build_pdf(state, exec_summary: str) -> bytes:
 
     story = []
 
-    # ═══════════════════════════════════════════════════════════════
     # PAGE 1 — COVER
-    # ═══════════════════════════════════════════════════════════════
     story.append(Spacer(1, 3*cm))
-    story.append(Paragraph("⚖ LexGuard", S["title"]))
-    story.append(Paragraph("Legal Risk Brief", style("sub2", fontSize=16, textColor=COL_ACCENT, alignment=TA_CENTER, spaceAfter=2)))
+    story.append(Paragraph("LexGuard", S["title"]))
+    story.append(Paragraph(" ", style("sub2", fontSize=16, textColor=COL_ACCENT, alignment=TA_CENTER, spaceAfter=2)))
     story.append(Spacer(1, 0.5*cm))
     story.append(HRFlowable(width="100%", thickness=2, color=COL_PRIMARY))
     story.append(Spacer(1, 0.5*cm))
@@ -272,9 +263,7 @@ def _build_pdf(state, exec_summary: str) -> bytes:
     story.append(risk_sum)
     story.append(PageBreak())
 
-    # ═══════════════════════════════════════════════════════════════
     # PAGE 2 — EXECUTIVE SUMMARY + METADATA
-    # ═══════════════════════════════════════════════════════════════
     story.append(Paragraph("1. Executive Summary", S["h1"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=COL_PRIMARY, spaceAfter=8))
     story.append(Paragraph(exec_summary, S["body"]))
@@ -314,9 +303,7 @@ def _build_pdf(state, exec_summary: str) -> bytes:
 
     story.append(PageBreak())
 
-    # ═══════════════════════════════════════════════════════════════
     # PAGE 3 — RISK REGISTER TABLE
-    # ═══════════════════════════════════════════════════════════════
     story.append(Paragraph("3. Risk Register", S["h1"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=COL_PRIMARY, spaceAfter=8))
 
@@ -375,9 +362,7 @@ def _build_pdf(state, exec_summary: str) -> bytes:
 
     story.append(PageBreak())
 
-    # ═══════════════════════════════════════════════════════════════
     # PAGE 4+ — CLAUSE-LEVEL DETAIL
-    # ═══════════════════════════════════════════════════════════════
     story.append(Paragraph("4. Clause-Level Risk Detail", S["h1"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=COL_PRIMARY, spaceAfter=8))
 
@@ -439,9 +424,7 @@ def _build_pdf(state, exec_summary: str) -> bytes:
 
             story.append(KeepTogether(block))
 
-    # ═══════════════════════════════════════════════════════════════
     # LAST PAGE — AUDIT TRAIL
-    # ═══════════════════════════════════════════════════════════════
     story.append(PageBreak())
     story.append(Paragraph("5. Audit Trail", S["h1"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=COL_PRIMARY, spaceAfter=8))
@@ -486,13 +469,9 @@ def _build_pdf(state, exec_summary: str) -> bytes:
     return buf.getvalue()
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # HELPERS
-# ══════════════════════════════════════════════════════════════════════════
-
 def _get_groq_client():
     try:
-        from groq import Groq
         api_key = os.getenv("GROQ_API_KEY")
         if api_key:
             return Groq(api_key=api_key)
@@ -503,7 +482,6 @@ def _get_groq_client():
 
 def _load_env():
     try:
-        from dotenv import load_dotenv
         env_path = Path(__file__).resolve().parent / ".env"
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
@@ -514,7 +492,6 @@ def _load_env():
 
 
 def _fail(state, error):
-    from agent_state import AgentStatus
     logger.error(f"[{AGENT_NAME}] FAILED — {error}")
     state.report_status = AgentStatus.FAILED
     state.report_error  = error

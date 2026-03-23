@@ -33,34 +33,21 @@ __pycache__/
 dist/
 build/
 *.egg
-
-# ── Virtual Environments ──────────────────────────────────────────────────
 .venv/
 venv/
 env/
 ENV/
 .env/
-
-# ── Streamlit ─────────────────────────────────────────────────────────────
 .streamlit/secrets.toml
-
-# ── Uploaded Contracts (sensitive legal documents) ───────────────────────
 uploads/
 *.pdf
-
-# ── Model / Vector DB Cache ───────────────────────────────────────────────
 *.faiss
 *.index
 vector_store/
 embeddings_cache/
-
-# ── OS ────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-
-# ── IDE ───────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.suo
 *.user
->>>>>>> 798120d2f30a52eb2fb376b77240a6288f5bd505

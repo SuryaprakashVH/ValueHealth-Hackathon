@@ -1,5 +1,11 @@
+import hashlib
+import re
+import logging
+from agent_state import PipelineState, AgentStatus, PageData
+import fitz
+
 """
-LexGuard — Document Ingestion Agent  (v4 — no JSON file dependency)
+LexGuard — Document Ingestion Agent
 
 All canonical titles, raw headings, categories and contract signatures
 are hardcoded directly from the 4 clause libraries.
@@ -11,13 +17,7 @@ Step 3 — Contract Type Detection  : keyword scoring (hardcoded signatures)
 Step 4 — Clause Structure Detection : heading pattern matching
 Step 5 — Clause Segmentation      : match headings → canonical titles
 
-LLM usage: NONE. LLM starts at Agent 2.
 """
-
-import hashlib
-import re
-import logging
-from agent_state import PipelineState, AgentStatus, PageData
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,6 @@ AGENT_NAME        = "DocumentIngestionAgent"
 MAX_SIZE_MB       = 20
 SCANNED_THRESHOLD = 50
 
-
-# ══════════════════════════════════════════════════════════════════════════
-# CONTRACT TYPE SIGNATURES  (from doc_signatures in the 4 JSONs)
-# primary   = title_patterns  → 10 pts each (strong match)
-# secondary = keywords        → 2  pts each (supporting match)
-# ══════════════════════════════════════════════════════════════════════════
 
 CONTRACT_SIGNATURES = {
     "NDA": {
@@ -100,18 +94,6 @@ CONTRACT_SIGNATURES = {
     },
 }
 
-
-# ══════════════════════════════════════════════════════════════════════════
-# CLAUSE LIBRARY  (canonical_title, raw_heading, category per contract type)
-# Taken directly from the 4 JSON files — no file loading needed.
-#
-# Each entry:
-#   canonical_title : standard name used as the display label
-#   raw_heading     : how this clause typically appears in real documents
-#   category        : clause category for downstream agents
-#   risk_weight     : HIGH / MEDIUM / LOW
-# ══════════════════════════════════════════════════════════════════════════
-
 CLAUSE_LIBRARY = {
     "NDA": [
         {"canonical_title": "Confidential Information Definition",  "raw_heading": "Definition of Confidential Information", "category": "confidentiality", "risk_weight": "HIGH"},
@@ -167,10 +149,7 @@ CLAUSE_LIBRARY = {
 ALL_CLAUSES = [c for clauses in CLAUSE_LIBRARY.values() for c in clauses]
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # MAIN ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════
-
 def run(state: PipelineState) -> PipelineState:
     logger.info(f"[{AGENT_NAME}] Starting → {state.file_name}")
     state.ingestion_status = AgentStatus.RUNNING
@@ -201,10 +180,7 @@ def run(state: PipelineState) -> PipelineState:
     return state
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# STEP 1 — VALIDATE + EXTRACT RAW TEXT
-# ══════════════════════════════════════════════════════════════════════════
-
+# VALIDATE + EXTRACT RAW TEXT
 def _validate(state: PipelineState) -> str | None:
     file_bytes = state.file_bytes
     state.file_size_kb = round(len(file_bytes) / 1024, 2)
@@ -213,7 +189,6 @@ def _validate(state: PipelineState) -> str | None:
     if not file_bytes.startswith(b"%PDF"):
         return "Not a valid PDF (missing %PDF header)."
     try:
-        import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
     except Exception as e:
         return f"Cannot open PDF: {e}"
@@ -229,7 +204,6 @@ def _validate(state: PipelineState) -> str | None:
 
 
 def _extract_raw(state: PipelineState) -> None:
-    import fitz
     doc = fitz.open(stream=state.file_bytes, filetype="pdf")
     state.page_count = doc.page_count
     pages, parts, scanned, warnings = [], [], [], []
@@ -251,10 +225,7 @@ def _extract_raw(state: PipelineState) -> None:
     state.full_text          = "\n\n--- PAGE BREAK ---\n\n".join(parts)
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# STEP 2 — CLEANING & NORMALISATION
-# ══════════════════════════════════════════════════════════════════════════
-
+# CLEANING & NORMALISATION
 def _clean_and_normalise(state: PipelineState) -> None:
     text = state.full_text
     text = text.replace("--- PAGE BREAK ---", "")
@@ -268,10 +239,7 @@ def _clean_and_normalise(state: PipelineState) -> None:
     state.clean_text = text.strip()
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# STEP 3 — CONTRACT TYPE DETECTION
-# ══════════════════════════════════════════════════════════════════════════
-
+# CONTRACT TYPE DETECTION
 def _detect_contract_type(state: PipelineState) -> None:
     text_lower  = state.clean_text.lower()
     fname_lower = state.file_name.lower()
@@ -329,21 +297,7 @@ def _detect_contract_type(state: PipelineState) -> None:
     logger.info(f"[{AGENT_NAME}] Contract type → {winner} (confidence: {confidence})")
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# STEP 4 + 5 — CLAUSE PRESENCE CHECK
-#
-# NEW APPROACH:
-#   - Take every canonical_title from the library for the detected type
-#   - Search the extracted PDF text for each clause's keywords
-#   - Mark each clause as FOUND or MISSING
-#   - All canonical titles shown in UI regardless of found/missing
-#
-# Search strategy (any one match = FOUND):
-#   1. raw_heading phrase anywhere in document text
-#   2. canonical_title phrase anywhere in document text
-#   3. All significant words (>4 chars) of raw_heading found in text
-# ══════════════════════════════════════════════════════════════════════════
-
+# CLAUSE PRESENCE CHECK
 def _get_library_for_type(contract_type: str) -> list[dict]:
     """Return clauses for detected type, or all clauses if UNKNOWN."""
     if contract_type in CLAUSE_LIBRARY:
@@ -403,10 +357,7 @@ def _segment_clauses(state: PipelineState) -> None:
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════
 # HELPER
-# ══════════════════════════════════════════════════════════════════════════
-
 def _fail(state: PipelineState, error: str) -> PipelineState:
     logger.error(f"[{AGENT_NAME}] FAILED — {error}")
     state.ingestion_status = AgentStatus.FAILED

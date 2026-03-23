@@ -1,22 +1,9 @@
-# ── PDF Processing ────────────────────────────────────────────────────────
 pymupdf>=1.23.0
 pdfplumber>=0.10.0
-
-# ── LLM — Gemini (new SDK) ────────────────────────────────────────────────
-google-genai>=1.0.0
-# ── LLM — Groq (free, fast, Llama 3.3 70B) ───────────────────────────────
 groq>=0.9.0
-
-# ── Environment Variables ─────────────────────────────────────────────────
 python-dotenv>=1.0.0
-
-# ── UI ────────────────────────────────────────────────────────────────────
 streamlit>=1.32.0
-
-# ── PDF Report Generation (Agent 7) ──────────────────────────────────────
 reportlab>=4.0.0
-weasyprint>=60.0
-
-# ── Vector DB (Agent 3) ───────────────────────────────────────────────────
+pymongo[srv]>=4.6.0
 faiss-cpu>=1.7.4
 sentence-transformers>=2.7.0
