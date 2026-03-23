@@ -178,8 +178,10 @@ if not st.session_state.pipeline_ran:
     # metadata_error stored in state for banner display
     st.session_state.agent_statuses["Clause Comparison"]   = state.clause_status
     st.session_state.agent_statuses["Risk Classification"] = state.risk_status
+    st.session_state.agent_statuses["Risk Classification"] = state.risk_status
     st.session_state.agent_statuses["Report Generation"]   = state.report_status
     st.session_state.agent_statuses["Clause Comparison"]   = state.clause_status
+    st.session_state.agent_statuses["Risk Classification"] = state.risk_status
 
     st.session_state.pipeline_json = {
         "file_name":                state.file_name,
@@ -216,7 +218,7 @@ output = st.session_state.pipeline_json
 
 # ── Agent status banner ───────────────────────────────────────────────────
 if state.metadata_status == AgentStatus.FAILED:
-    st.warning(f"Metadata Extraction failed: {getattr(state, 'metadata_error', 'Unknown error')} — check your GEMINI_API_KEY.")
+    st.warning(f"Metadata Extraction failed: {getattr(state, 'metadata_error', 'Unknown error')} — check your GROQ_API_KEY.")
 
 if state.ingestion_status == AgentStatus.FAILED:
     st.error(f"Ingestion Agent FAILED: {state.ingestion_error}")
@@ -254,7 +256,7 @@ if state.ingestion_warnings:
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["📄 Extracted text", "🔍 Clause segments", "🧾 Metadata", "⚖️ Clause Comparison"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📄 Extracted text", "🔍 Clause segments", "🧾 Metadata", "⚖️ Clause Comparison", "🚨 Risk Register"])
 
 with tab1:
     view = st.radio("View", ["Full document", "Page by page"],
@@ -373,6 +375,62 @@ with tab3:
 
 st.divider()
 
+# ── Tab 5: Risk Register ──────────────────────────────────────────────────
+with tab5:
+    if state.risk_status == AgentStatus.PENDING:
+        st.info("Risk Classification Agent has not run yet.")
+    elif state.risk_status == AgentStatus.FAILED:
+        st.error(f"Risk classification failed: {getattr(state, 'risk_error', '')}")
+    elif not state.risk_register:
+        st.warning("No risk register available.")
+    else:
+        reg = state.risk_register
+
+        high_items   = [r for r in reg if r["severity"] == "HIGH"]
+        medium_items = [r for r in reg if r["severity"] == "MEDIUM"]
+        low_items    = [r for r in reg if r["severity"] == "LOW"]
+        accepted     = [r for r in reg if r["severity"] == "ACCEPTED"]
+
+        # Summary metrics
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("🔴 High",     len(high_items))
+        c2.metric("🟡 Medium",   len(medium_items))
+        c3.metric("🟢 Low",      len(low_items))
+        c4.metric("✅ Accepted", len(accepted))
+        st.divider()
+
+        SEVERITY_COLOR = {
+            "HIGH":     "🔴",
+            "MEDIUM":   "🟡",
+            "LOW":      "🟢",
+            "ACCEPTED": "✅",
+        }
+
+        # Show in order: HIGH first, then MEDIUM, LOW, ACCEPTED
+        for item in high_items + medium_items + low_items + accepted:
+            sev    = item["severity"]
+            icon   = SEVERITY_COLOR.get(sev, "⚪")
+            label  = f"{icon} {sev} — {item['canonical_title']}  [{item['category'].replace('_',' ').title()}]"
+            expand = sev in ("HIGH", "MEDIUM")
+
+            with st.expander(label, expanded=expand):
+                if sev == "ACCEPTED":
+                    st.success("Clause aligns with standard. No action required.")
+                else:
+                    col_a, col_b = st.columns(2)
+                    col_a.markdown(f"**Category:** `{item['category'].replace('_',' ').title()}`")
+                    col_b.markdown(f"**Similarity:** {item['similarity_score']:.0%}")
+                    st.markdown(f"**Business impact:** {item['business_impact']}")
+                    st.warning(f"**Recommendation:** {item['recommendation']}")
+                    with st.expander("View clause texts", expanded=False):
+                        ca, cb = st.columns(2)
+                        ca.markdown("**Contract clause**")
+                        ca.text(item["contract_text"][:400])
+                        cb.markdown("**Standard clause**")
+                        cb.text(item["standard_text"][:400])
+
+st.divider()
+
 # ── Build + store pipeline state JSON (feeds sidebar viewer) ─────────────
 output = {
     "file_name":                state.file_name,
@@ -388,6 +446,8 @@ output = {
     "metadata_status":          state.metadata_status.value,
         "clause_status":            state.clause_status.value,
         "clause_comparisons":       state.clause_comparisons,
+        "risk_status":              state.risk_status.value,
+        "risk_register":            state.risk_register,
     "contract_metadata":        state.contract_metadata,
     "clause_segments": [
         {k: v for k, v in c.items()} for c in state.clause_segments

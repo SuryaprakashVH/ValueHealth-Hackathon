@@ -70,9 +70,19 @@ class PipelineState:
     #   is_deviated,         ← True if similarity < threshold
     # }
 
-    # ── Risk Classification Agent (filled later) ─────────────────
+    # ── Risk Classification Agent outputs ────────────────────────
     risk_status: AgentStatus = AgentStatus.PENDING
+    risk_error: Optional[str] = None
     risk_register: list[dict] = field(default_factory=list)
+    # Each dict: {
+    #   clause_id, canonical_title, category,
+    #   severity,         ← HIGH / MEDIUM / LOW / ACCEPTED
+    #   business_impact,  ← plain English consequence
+    #   recommendation,   ← what legal team should do
+    #   similarity_score, deviation_summary,
+    #   standard_text, contract_text, is_deviated
+    # }
+    # Note: category (from clause library) is the risk type — no duplication needed
 
     # ── Report Agent (filled later) ──────────────────────────────
     report_status: AgentStatus = AgentStatus.PENDING

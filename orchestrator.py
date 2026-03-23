@@ -17,9 +17,9 @@ from agent_state import PipelineState, AgentStatus
 import document_ingestion_agent
 import metadata_extraction_agent
 import clause_comparison_agent
+import risk_classification_agent
 
 # Placeholder stubs for future agents (not built yet)
-# import risk_classification_agent
 # import report_generation_agent
 
 logging.basicConfig(
@@ -71,9 +71,13 @@ def run_pipeline(file_bytes: bytes, file_name: str) -> PipelineState:
         deviated = sum(1 for c in state.clause_comparisons if c["is_deviated"])
         logger.info(f"[Orchestrator] Clause comparison done — {deviated} deviations found.")
 
-    # ── Node 4: Risk Classification Agent (stub) ──────────────────────
-    logger.info("[Orchestrator] Handing off to Risk Classification Agent... (coming next)")
-    # state = risk_classification_agent.run(state)
+    # ── Node 4: Risk Classification Agent ────────────────────────────
+    state = risk_classification_agent.run(state)
+    if state.risk_status == AgentStatus.FAILED:
+        logger.error(f"[Orchestrator] Risk classification failed: {state.risk_error}")
+    else:
+        high = sum(1 for r in state.risk_register if r["severity"] == "HIGH")
+        logger.info(f"[Orchestrator] Risk classification done — {high} HIGH risks found.")
 
     # ── Node 5: Report Generation Agent (stub) ────────────────────────
     logger.info("[Orchestrator] Handing off to Report Generation Agent... (coming next)")
