@@ -127,6 +127,7 @@ with st.sidebar:
             file_name="pipeline_state.json",
             mime="application/json",
             use_container_width=True,
+            key="dl_json_sidebar",
         )
     else:
         st.caption("Upload a contract to see the pipeline JSON here.")
@@ -178,10 +179,13 @@ if not st.session_state.pipeline_ran:
     # metadata_error stored in state for banner display
     st.session_state.agent_statuses["Clause Comparison"]   = state.clause_status
     st.session_state.agent_statuses["Risk Classification"] = state.risk_status
+    st.session_state.agent_statuses["Report Generation"]   = state.report_status
     st.session_state.agent_statuses["Risk Classification"] = state.risk_status
+    st.session_state.agent_statuses["Report Generation"]   = state.report_status
     st.session_state.agent_statuses["Report Generation"]   = state.report_status
     st.session_state.agent_statuses["Clause Comparison"]   = state.clause_status
     st.session_state.agent_statuses["Risk Classification"] = state.risk_status
+    st.session_state.agent_statuses["Report Generation"]   = state.report_status
 
     st.session_state.pipeline_json = {
         "file_name":                state.file_name,
@@ -216,9 +220,22 @@ if not st.session_state.pipeline_ran:
 state  = st.session_state.pipeline_state
 output = st.session_state.pipeline_json
 
+# ── Persistent download button at top if report is ready ────────────────────
+if state.report_pdf_bytes:
+    fname = state.file_name.replace(".pdf", "").replace(" ", "_")
+    st.download_button(
+        label="⬇ Download Legal Risk Brief (PDF)",
+        data=state.report_pdf_bytes,
+        file_name=f"LexGuard_RiskBrief_{fname}.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+        type="primary",
+        key="dl_pdf_top",
+    )
+
 # ── Agent status banner ───────────────────────────────────────────────────
 if state.metadata_status == AgentStatus.FAILED:
-    st.warning(f"Metadata Extraction failed: {getattr(state, 'metadata_error', 'Unknown error')} — check your GROQ_API_KEY.")
+    st.warning(f"Metadata Extraction failed: {getattr(state, 'metadata_error', 'Unknown error')} — check your GEMINI_API_KEY.")
 
 if state.ingestion_status == AgentStatus.FAILED:
     st.error(f"Ingestion Agent FAILED: {state.ingestion_error}")
@@ -256,7 +273,7 @@ if state.ingestion_warnings:
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📄 Extracted text", "🔍 Clause segments", "🧾 Metadata", "⚖️ Clause Comparison", "🚨 Risk Register"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📄 Extracted text", "🔍 Clause segments", "🧾 Metadata", "⚖️ Clause Comparison", "🚨 Risk Register", "📋 Report"])
 
 with tab1:
     view = st.radio("View", ["Full document", "Page by page"],
@@ -431,6 +448,58 @@ with tab5:
 
 st.divider()
 
+# ── Tab 6: Report ─────────────────────────────────────────────────────────
+with tab6:
+    if state.report_status == AgentStatus.PENDING:
+        st.info("Report Generation Agent has not run yet.")
+    elif state.report_status == AgentStatus.FAILED:
+        st.error(f"Report generation failed: {getattr(state, 'report_error', '')}")
+    elif not state.report_pdf_bytes:
+        st.warning("Report was not generated.")
+    else:
+        st.success(f"Legal Risk Brief is ready — {len(state.report_pdf_bytes):,} bytes")
+
+        # ── Big download button ───────────────────────────────────────────
+        fname = state.file_name.replace(".pdf", "").replace(" ", "_")
+        st.download_button(
+            label="⬇ Download Legal Risk Brief (PDF)",
+            data=state.report_pdf_bytes,
+            file_name=f"LexGuard_RiskBrief_{fname}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            type="primary",
+            key="dl_pdf_tab",
+        )
+
+        st.divider()
+
+        # ── Report preview ────────────────────────────────────────────────
+        st.subheader("Report preview")
+        reg    = state.risk_register
+        high   = [r for r in reg if r["severity"] == "HIGH"]
+        medium = [r for r in reg if r["severity"] == "MEDIUM"]
+        low    = [r for r in reg if r["severity"] == "LOW"]
+        acc    = [r for r in reg if r["severity"] == "ACCEPTED"]
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("🔴 High",     len(high))
+        c2.metric("🟡 Medium",   len(medium))
+        c3.metric("🟢 Low",      len(low))
+        c4.metric("✅ Accepted", len(acc))
+
+        st.divider()
+        st.markdown("**Sections in your PDF:**")
+        st.markdown("""
+- Cover page — contract name, type, risk summary counts
+- Executive Summary — AI-generated overview
+- Contract Metadata — parties, dates, jurisdiction, terms
+- Risk Register — color-coded table (HIGH/MEDIUM/LOW)
+- Clause-Level Detail — deviation + business impact + recommendation per clause
+- Audit Trail — doc hash, timestamp, model used
+""")
+
+st.divider()
+
 # ── Build + store pipeline state JSON (feeds sidebar viewer) ─────────────
 output = {
     "file_name":                state.file_name,
@@ -448,6 +517,7 @@ output = {
         "clause_comparisons":       state.clause_comparisons,
         "risk_status":              state.risk_status.value,
         "risk_register":            state.risk_register,
+        "report_status":            state.report_status.value,
     "contract_metadata":        state.contract_metadata,
     "clause_segments": [
         {k: v for k, v in c.items()} for c in state.clause_segments

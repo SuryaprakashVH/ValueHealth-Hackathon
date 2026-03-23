@@ -18,9 +18,7 @@ import document_ingestion_agent
 import metadata_extraction_agent
 import clause_comparison_agent
 import risk_classification_agent
-
-# Placeholder stubs for future agents (not built yet)
-# import report_generation_agent
+import report_generation_agent
 
 logging.basicConfig(
     level=logging.INFO,
@@ -79,9 +77,12 @@ def run_pipeline(file_bytes: bytes, file_name: str) -> PipelineState:
         high = sum(1 for r in state.risk_register if r["severity"] == "HIGH")
         logger.info(f"[Orchestrator] Risk classification done — {high} HIGH risks found.")
 
-    # ── Node 5: Report Generation Agent (stub) ────────────────────────
-    logger.info("[Orchestrator] Handing off to Report Generation Agent... (coming next)")
-    # state = report_generation_agent.run(state)
+    # ── Node 5: Report Generation Agent ──────────────────────────────
+    state = report_generation_agent.run(state)
+    if state.report_status == AgentStatus.FAILED:
+        logger.error(f"[Orchestrator] Report generation failed: {state.report_error}")
+    else:
+        logger.info(f"[Orchestrator] Report generated ({len(state.report_pdf_bytes):,} bytes).")
 
     logger.info(f"[Orchestrator] Pipeline complete. Ingestion status: {state.ingestion_status.value}")
     return state

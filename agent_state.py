@@ -84,6 +84,8 @@ class PipelineState:
     # }
     # Note: category (from clause library) is the risk type — no duplication needed
 
-    # ── Report Agent (filled later) ──────────────────────────────
+    # ── Report Generation Agent outputs ─────────────────────────
     report_status: AgentStatus = AgentStatus.PENDING
-    report_path: Optional[str] = None
+    report_error: Optional[str] = None
+    report_pdf_bytes: bytes = field(default_factory=bytes)
+    # report_pdf_bytes: in-memory PDF — read by UI for st.download_button
