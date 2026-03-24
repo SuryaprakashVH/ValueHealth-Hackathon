@@ -40,7 +40,7 @@ def get_config(key: str, default: str = None) -> str:
         except ImportError:
             import tomli as tomllib  # fallback for older Python
         
-        secrets_path = Path(__file__).parent.parent / ".streamlit" / "secrets.toml"
+        secrets_path = Path(__file__).parent / ".streamlit" / "secrets.toml"
         if secrets_path.exists():
             with open(secrets_path, "rb") as f:
                 secrets = tomllib.load(f)

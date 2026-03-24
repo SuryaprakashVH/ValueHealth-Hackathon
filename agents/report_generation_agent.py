@@ -308,13 +308,13 @@ def _build_pdf(state, exec_summary: str) -> bytes:
     story.append(Paragraph("3. Risk Register", S["h1"]))
     story.append(HRFlowable(width="100%", thickness=0.5, color=COL_PRIMARY, spaceAfter=8))
 
+    sev_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2, "ACCEPTED": 3}
+    sorted_reg = sorted(reg, key=lambda r: sev_order.get(r["severity"], 99)) if reg else []
+
     if reg:
         header = ["#", "Clause", "Category", "Similarity", "Severity"]
         rows   = [header]
         row_styles = []
-
-        sev_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2, "ACCEPTED": 3}
-        sorted_reg = sorted(reg, key=lambda r: sev_order.get(r["severity"], 99))
 
         for i, r in enumerate(sorted_reg, 1):
             sev    = r["severity"]
@@ -371,6 +371,7 @@ def _build_pdf(state, exec_summary: str) -> bytes:
 
     if not deviated_items:
         story.append(Paragraph("No deviations detected. All clauses align with the standard library.", S["body"]))
+        return buf.getvalue()
     else:
         for idx, r in enumerate(deviated_items, 1):
             sev     = r["severity"]
