@@ -476,7 +476,9 @@ def _get_groq_client():
     try:
         api_key = get_config("GROQ_API_KEY")
         if api_key:
+            os.environ["GROQ_API_KEY"] = api_key
             return Groq(api_key=api_key)
+        logger.warning("[ReportGenerationAgent] GROQ_API_KEY not found")
     except ImportError:
         pass
     return None

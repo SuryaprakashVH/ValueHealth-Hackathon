@@ -283,9 +283,13 @@ Guidelines:
 def _get_groq_client():
     try:
         api_key = get_config("GROQ_API_KEY")
-        return Groq(api_key=api_key) if api_key else None
+        if api_key:
+            os.environ["GROQ_API_KEY"] = api_key
+            return Groq(api_key=api_key)
+        logger.warning("[ChatbotAgent] GROQ_API_KEY not found")
     except ImportError:
         return None
+    return None
 
 
 def _load_env():

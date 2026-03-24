@@ -79,11 +79,15 @@ def run(state):
 
     # Check API key
     api_key = get_config("GROQ_API_KEY")
+    logger.info(f"[{AGENT_NAME}] get_config GROQ_API_KEY set? {bool(api_key)}")
     if not api_key:
         return _fail(state,
             "GROQ_API_KEY not found. "
-            "Get a free key at https://console.groq.com and add to .env: "
-            "GROQ_API_KEY=your_key_here")
+            "Set GROQ_API_KEY in .streamlit/secrets.toml or Streamlit secrets.")
+
+    # Propagate into os.environ for any legacy getenv usage
+    os.environ["GROQ_API_KEY"] = api_key
+
 
     # Get schema for this contract type
     schema = METADATA_SCHEMAS.get(state.contract_type, FALLBACK_SCHEMA)
