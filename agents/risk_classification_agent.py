@@ -6,6 +6,7 @@ from pathlib import Path
 from agent_state import AgentStatus
 from groq import Groq
 from dotenv import load_dotenv
+from config import get_config
 
 """
 LexGuard — Risk Classification Agent
@@ -190,7 +191,7 @@ Return raw JSON only — no markdown, no explanation."""
 # HELPERS
 def _get_groq_client():
     try:
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = get_config("GROQ_API_KEY")
         if api_key:
             return Groq(api_key=api_key)
     except ImportError:

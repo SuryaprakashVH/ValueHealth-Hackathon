@@ -6,6 +6,7 @@ from pathlib import Path
 from groq import Groq
 from dotenv import load_dotenv
 from agent_state import AgentStatus
+from config import get_config
 
 
 """
@@ -77,7 +78,7 @@ def run(state):
     _load_env()
 
     # Check API key
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = get_config("GROQ_API_KEY")
     if not api_key:
         return _fail(state,
             "GROQ_API_KEY not found. "

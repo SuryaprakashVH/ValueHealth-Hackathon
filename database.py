@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from config import get_config
 
 """
 LexGuard — Database Layer (MongoDB Atlas)
@@ -33,7 +34,7 @@ def get_db():
     Returns None if MONGODB_URI is not set or connection fails.
     """
     _load_env()
-    uri = os.getenv("MONGODB_URI")
+    uri = get_config("MONGODB_URI")
     if not uri:
         logger.warning("[DB] MONGODB_URI not set — database features disabled.")
         return None

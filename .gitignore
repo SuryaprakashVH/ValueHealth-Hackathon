@@ -1,43 +1,31 @@
-<<<<<<< HEAD
 # Python cache
 __pycache__/
 *.pyc
-<<<<<<< HEAD
 *.pyo
 *.pyd
 
-=======
-*.pyo  
-=======
-# ── Environment Variables — NEVER commit this ─────────────────────────────
+
+# ── Environment Variables — NEVER commit this ────────────────────────────
 .env
 .env.local
 .env.*.local
-.env.production
-.env.development
->>>>>>> 798120d2f30a52eb2fb376b77240a6288f5bd505
 
 # ── Python ────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-<<<<<<< HEAD
- 
->>>>>>> 7dc5d2f1f4d8f8d1600d650e1440f3623f3c431d
+
 # Virtual environment
 .venv/
-=======
 .Python
 *.egg-info/
 dist/
 build/
 *.egg
-.venv/
 venv/
 env/
 ENV/
-.env/
 .streamlit/secrets.toml
 uploads/
 *.pdf
@@ -51,3 +39,4 @@ Thumbs.db
 .idea/
 *.suo
 *.user
+.streamlit/

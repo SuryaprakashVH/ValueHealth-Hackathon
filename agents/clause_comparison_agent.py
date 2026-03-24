@@ -9,6 +9,7 @@ from pathlib import Path
 from agent_state import AgentStatus
 from groq import Groq
 from dotenv import load_dotenv
+from config import get_config
 
 
 """
@@ -238,7 +239,7 @@ def _extract_clause_texts(clean_text: str, found_clauses: list) -> dict:
 def _get_groq_client():
     """Initialise Groq client. Returns None if not available."""
     try:
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = get_config("GROQ_API_KEY")
         if api_key:
             return Groq(api_key=api_key)
     except ImportError:

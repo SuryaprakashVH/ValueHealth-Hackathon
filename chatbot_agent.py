@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from groq import Groq
 from dotenv import load_dotenv
+from config import get_config
 
 """
 LexGuard — Chatbot Agent
@@ -281,7 +282,7 @@ Guidelines:
 # HELPERS
 def _get_groq_client():
     try:
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = get_config("GROQ_API_KEY")
         return Groq(api_key=api_key) if api_key else None
     except ImportError:
         return None

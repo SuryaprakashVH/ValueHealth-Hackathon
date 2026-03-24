@@ -7,3 +7,4 @@ reportlab>=4.0.0
 pymongo[srv]>=4.6.0
 faiss-cpu>=1.7.4
 sentence-transformers>=2.7.0
+tomli>=1.2.0
