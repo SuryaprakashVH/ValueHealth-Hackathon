@@ -45,7 +45,12 @@ def get_config(key: str, default: str = None) -> str:
             with open(secrets_path, "rb") as f:
                 secrets = tomllib.load(f)
                 if key in secrets:
-                    return secrets[key]
+                    value = secrets[key]
+                    # Reject placeholder values used in examples
+                    if isinstance(value, str) and value.startswith("your-"):
+                        value = None
+                    if value:
+                        return value
     except (ImportError, Exception):
         pass
     
